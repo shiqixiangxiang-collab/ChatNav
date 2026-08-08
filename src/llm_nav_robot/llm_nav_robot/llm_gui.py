@@ -17,7 +17,6 @@ import threading
 
 import numpy as np
 import rclpy
-from rclpy.executors import SingleThreadedExecutor
 from std_msgs.msg import String
 
 import tkinter as tk
@@ -125,20 +124,23 @@ class LLMGui:
         self.root.configure(bg=COLOR_BG)
 
         # ---------- ROS 节点（main 中已 rclpy.init）----------
+        # ⚠️ 铁律：不能用独立 spin 线程！rclpy 线程与 Tk mainloop 不兼容，
+        # 会导致 pack 布局失效（bottom 变 1x1 不可见）。必须用 after 主线程轮询。
         self.node = rclpy.create_node('llm_gui')
         self.pub = self.node.create_publisher(String, 'llm_cmd', 10)
         self.sub = self.node.create_subscription(String, 'llm_reply',
                                                  self.reply_cb, 10)
-        self.executor = SingleThreadedExecutor()
-        self.executor.add_node(self.node)
-        threading.Thread(target=self.executor.spin, daemon=True).start()
 
         # ---------- 语音（懒加载）----------
         self.recorder = VoiceRecorder()
 
         self._build_ui()
-        self._fit_screen()
+        self.root.update_idletasks()  # 强制立即布局
+        self._fit_screen()      # pack 后按自然尺寸定位居中（只设位置，不设尺寸）
         self.append_chat('系统', 'LLM 导航指挥官已就绪。输入指令，或单击语音按钮说话。')
+
+        # 主线程轮询 ROS 回调（替代独立 spin 线程，避免破坏 Tk 布局）
+        self.root.after(100, self._ros_spin)
 
         # 诊断：2 秒后打印窗口与控件状态（写入 stdout 日志）
         self.root.after(2000, self._dump_geometry)
@@ -184,32 +186,32 @@ class LLMGui:
         self.root.protocol('WM_DELETE_WINDOW', self.on_close)
 
     def _fit_screen(self):
-        """窗口自适应屏幕尺寸并居中"""
+        """窗口居中定位。⚠️ 只设位置(+x+y)，绝不设固定尺寸：
+        固定尺寸 geometry 与 rclpy 轮询组合会破坏 Tk 布局（bottom 塌陷为 1x1）。"""
         try:
             sw = self.root.winfo_screenwidth()
             sh = self.root.winfo_screenheight()
-            w = min(620, sw - 80)
-            h = min(560, sh - 120)
+            w = self.root.winfo_reqwidth()
+            h = self.root.winfo_reqheight()
             x = max(0, (sw - w) // 2)
             y = max(0, (sh - h) // 2)
-            self.root.geometry(f'{w}x{h}+{x}+{y}')
-            self.root.minsize(440, 380)
-        except Exception as e:
-            self.root.geometry('620x560')
+            self.root.geometry(f'+{x}+{y}')
+        except Exception:
+            pass
 
     def _dump_geometry(self):
-        """诊断：输出窗口与控件几何信息"""
+        """诊断：输出窗口与控件几何信息（用 ROS logger，绕过 stdout 缓冲）"""
         try:
-            print(f'[GUI诊断] 窗口: {self.root.winfo_geometry()}')
-            print(f'[GUI诊断] 屏幕: {self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}')
+            self.node.get_logger().info(f'窗口: {self.root.winfo_geometry()} mapped={self.root.winfo_ismapped()}')
+            self.node.get_logger().info(f'屏幕: {self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}')
             for name, w in (('chat', self.chat), ('bottom', self.bottom),
                             ('entry', self.entry), ('send_btn', self.send_btn),
                             ('voice_btn', self.voice_btn)):
-                print(f'[GUI诊断] {name}: {w.winfo_geometry()} 映射={w.winfo_ismapped()}')
+                self.node.get_logger().info(
+                    f'控件 {name}: geo={w.winfo_geometry()} mapped={w.winfo_ismapped()} exist={w.winfo_exists()}')
         except Exception as e:
-            print(f'[GUI诊断] 失败: {e}')
-        # 定期刷新，观察是否被系统调整
-        self.root.after(10000, self._dump_geometry)
+            self.node.get_logger().error(f'诊断失败: {e}')
+        self.root.after(5000, self._dump_geometry)
 
     # ---------- 聊天 ----------
     def append_chat(self, who, text):
@@ -221,7 +223,17 @@ class LLMGui:
         self.chat.see('end')
 
     def reply_cb(self, msg):
-        self.root.after(0, self.append_chat, '小车', msg.data)
+        # 同线程调用（after 轮询），无需 root.after 转发
+        self.node.get_logger().info(f'收到小车回复: {msg.data}')
+        self.append_chat('小车', msg.data)
+
+    def _ros_spin(self):
+        """主线程轮询 rclpy 回调（100ms 间隔）"""
+        try:
+            rclpy.spin_once(self.node, timeout_sec=0.05)
+        except Exception:
+            pass
+        self.root.after(100, self._ros_spin)
 
     # ---------- 动作 ----------
     def send(self):
