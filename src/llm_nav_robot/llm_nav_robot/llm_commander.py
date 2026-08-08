@@ -268,14 +268,24 @@ class LLMCommander(BasicNavigator):
         return pose
 
     def wait_nav_result(self, timeout=600.0):
+        """等待导航结果。兼容单点导航（estimated_time_remaining）与
+        路点导航（current_waypoint）的不同反馈字段；超时用墙钟计算。"""
+        start = time.time()
         while not self.isTaskComplete():
             feedback = self.getFeedback()
-            if feedback:
-                remaining = Duration.from_msg(feedback.estimated_time_remaining).nanoseconds / 1e9
-                self.get_logger().info(f'预计 {remaining:.0f} 秒后到达')
-            if Duration.from_msg(feedback.navigation_time) > Duration(seconds=timeout):
+            if feedback is not None:
+                if hasattr(feedback, 'estimated_time_remaining'):
+                    try:
+                        remaining = Duration.from_msg(feedback.estimated_time_remaining).nanoseconds / 1e9
+                        self.get_logger().info(f'预计 {remaining:.0f} 秒后到达')
+                    except Exception:
+                        pass
+                if hasattr(feedback, 'current_waypoint'):
+                    self.get_logger().info(f'当前路点: {feedback.current_waypoint}')
+            if time.time() - start > timeout:
                 self.cancelTask()
                 return {'success': False, 'message': '导航超时，已取消'}
+            time.sleep(0.2)  # 避免忙等刷屏
         result = self.getResult()
         if result == TaskResult.SUCCEEDED:
             return {'success': True, 'message': '导航成功'}
