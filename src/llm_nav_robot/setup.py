@@ -29,6 +29,7 @@ setup(
     entry_points={
         'console_scripts': [
             'llm_commander = llm_nav_robot.llm_commander:main',
+            'llm_gui = llm_nav_robot.llm_gui:main',
         ],
     },
 )

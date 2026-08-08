@@ -10,13 +10,18 @@
 """
 
 import json
+import queue
 import sys
+import threading
+import time
 
 import requests
 import rclpy
+import rclpy.executors
 from geometry_msgs.msg import PoseStamped
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from rclpy.duration import Duration
+from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 from tf_transformations import quaternion_from_euler
 
@@ -39,7 +44,13 @@ SYSTEM_PROMPT = """你是 ROS2 自动导航小车的「自然语言指挥官」�
    - 「你在哪/当前位置」→ get_robot_pose
    - 「停下/别动/取消/紧急」→ stop_robot
 4. 用户给了明确坐标就直用；只给地点名就按上面列表推断；两者都没有则先 get_robot_pose 了解情况或请用户补充
-5. 工具执行结果会以 JSON 返回给你，请根据结果用简洁自然的中文向用户汇报（成功/失败/当前位置），像可靠的伙伴一样说话
+5. 工具执行结果会以 JSON 返回给你，根据结果汇报
+
+【回复铁律】
+- 简洁精准：一句话陈述事实与结果，不寒暄、不解释过程、不用感叹号堆砌
+- 禁止表情符号（emoji）
+- 禁止拟人化：不说「伙伴」「开心」「好的呀」等拟人表达，保持机器式冷静
+- 示例：「已到达 (1.0, 2.0)」「巡检完成：3/3 路点」「当前位置 (0.12, -0.01)」「导航失败：目的地不可达」
 
 注意：yaw 单位是弧度（0~2π），用户没提朝向就默认 0。"""
 
@@ -114,10 +125,26 @@ class LLMCommander(BasicNavigator):
         self.buffer_ = Buffer()
         self.listener_ = TransformListener(self.buffer_, self)
         self._nav_available = nav_available
+        # 话题接口：订阅指令 /llm_cmd，发布回复 /llm_reply（供 GUI 使用）
+        self.cmd_queue = queue.Queue()
+        self.cmd_sub = self.create_subscription(String, 'llm_cmd', self.cmd_callback, 10)
+        self.reply_pub = self.create_publisher(String, 'llm_reply', 10)
+        # ⚠️ 注意：spin 线程不在此启动。waitUntilNav2Active 内部用 rclpy.spin_once
+        # 在主线程 spin 本节点，若提前启动独立 executor 会与其冲突导致回调失效。
+        # 正确时机：waitUntilNav2Active 完成后在 run() 中启动。
         if nav_available:
             self.get_logger().info('LLM 指挥官节点初始化完成（导航模式）')
         else:
             self.get_logger().info('LLM 指挥官节点初始化完成（纯 LLM 测试模式）')
+
+    def cmd_callback(self, msg):
+        """话题指令回调：入队，由主循环处理"""
+        self.get_logger().info(f'收到话题指令: {msg.data}')
+        self.cmd_queue.put(msg.data)
+
+    def publish_reply(self, text):
+        self.reply_pub.publish(String(data=text))
+        self.get_logger().info(f'汇报: {text}')
 
     # ---------- LLM 对话 ----------
     def chat_once(self, messages, tools=None):
@@ -136,30 +163,55 @@ class LLMCommander(BasicNavigator):
         if wait_nav:
             self.get_logger().info('等待 Nav2 导航系统就绪...')
             self.waitUntilNav2Active()
-            self.get_logger().info('导航就绪，LLM 指挥官上线 🎵 请输入中文指令（exit 退出）')
+            self.get_logger().info('导航就绪，LLM 指挥官上线。终端输入或发布话题 /llm_cmd（exit 退出）')
         else:
             self.get_logger().info('纯 LLM 模式（不连接导航），输入 exit 退出')
 
+        threading.Thread(target=self.stdin_reader, daemon=True).start()
+
+        # ⚠️ 不能使用独立 spin 线程：导航同步调用（goToPose 内部 spin_until_future_complete）
+        # 会临时占用 node 导致自建 executor 的订阅回调失效。
+        # 正确做法：主循环用 spin_once 处理订阅回调，导航同步调用由 rclpy 内部自行等待。
         while rclpy.ok():
+            rclpy.spin_once(self, timeout_sec=0.5)
             try:
-                cmd = input('你 > ').strip()
-            except (EOFError, KeyboardInterrupt):
-                break
-            if not cmd:
+                cmd = self.cmd_queue.get_nowait()
+            except queue.Empty:
                 continue
             if cmd.lower() in ('exit', 'quit', '退出'):
                 break
-            messages = [
-                {'role': 'system', 'content': SYSTEM_PROMPT},
-                {'role': 'user', 'content': cmd},
-            ]
+            self.handle_command(cmd)
+
+    def stdin_reader(self):
+        """后台线程读取终端输入；非交互终端（GUI 驱动）时直接跳过"""
+        if not sys.stdin.isatty():
+            return
+        while rclpy.ok():
             try:
-                reply = self.process_command(messages)
-                print(f'小车 > {reply}')
-                self.get_logger().info(f'汇报: {reply}')
-            except Exception as e:
-                self.get_logger().error(f'执行出错: {e}')
-                print(f'小车 > 出错了：{e}')
+                cmd = input('你 > ').strip()
+            except EOFError:
+                time.sleep(0.5)
+                continue
+            except KeyboardInterrupt:
+                break
+            if cmd:
+                self.cmd_queue.put(cmd)
+
+    def handle_command(self, cmd):
+        """处理单条指令：LLM 意图解析 → 工具执行 → 汇报"""
+        messages = [
+            {'role': 'system', 'content': SYSTEM_PROMPT},
+            {'role': 'user', 'content': cmd},
+        ]
+        try:
+            reply = self.process_command(messages)
+            print(f'小车 > {reply}')
+            self.publish_reply(reply)
+        except Exception as e:
+            self.get_logger().error(f'执行出错: {e}')
+            err_msg = f'执行出错：{e}'
+            print(f'小车 > {err_msg}')
+            self.publish_reply(err_msg)
 
     def process_command(self, messages, max_rounds=6):
         """多轮 function calling：直到 LLM 不再请求工具"""
