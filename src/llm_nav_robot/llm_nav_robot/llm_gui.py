@@ -13,10 +13,7 @@
 
 import json
 import os
-import queue
-import sys
 import threading
-import time
 
 import numpy as np
 import rclpy
@@ -48,7 +45,7 @@ COLOR_REC = '#f38ba8'
 
 
 class VoiceRecorder:
-    """录音 + vosk 离线中文识别（无麦克风/无模型时优雅降级）"""
+    """录音 + vosk 离线中文识别（懒加载模型，无麦克风/无模型时优雅降级）"""
 
     def __init__(self):
         self.recording = False
@@ -56,28 +53,33 @@ class VoiceRecorder:
         self.stream = None
         self.model = None
         self.recog = None
-        self.model_error = self.load_model()
+        self.model_error = None
 
-    def load_model(self):
+    def _ensure_model(self):
+        """首次录音时才加载模型（避免阻塞 GUI 启动）"""
+        if self.model is not None:
+            return True
         if not SOUNDDEVICE_OK:
-            return '未安装 sounddevice，语音输入不可用'
+            self.model_error = '未安装 sounddevice，语音输入不可用'
+            return False
         if not os.path.isdir(VOSK_MODEL_DIR):
-            return f'未找到语音模型（{VOSK_MODEL_DIR}），语音输入不可用'
+            self.model_error = f'未找到语音模型（{VOSK_MODEL_DIR}）'
+            return False
         try:
             from vosk import Model, KaldiRecognizer
             self.model = Model(VOSK_MODEL_DIR)
             self.recog = KaldiRecognizer(self.model, SAMPLERATE)
-            return None
+            self.model_error = None
+            return True
         except Exception as e:
-            return f'语音模型加载失败: {e}'
+            self.model_error = f'语音模型加载失败: {e}'
+            return False
 
     def start(self):
         if not SOUNDDEVICE_OK:
             return False, self.model_error or '语音不可用'
-        if self.model is None:
-            err = self.load_model()
-            if err:
-                return False, err
+        if not self._ensure_model():
+            return False, self.model_error or '语音模型不可用'
         try:
             self.frames = []
             self.recording = True
@@ -120,11 +122,9 @@ class LLMGui:
     def __init__(self, root):
         self.root = root
         self.root.title('LLM 导航指挥官')
-        self.root.geometry('600x540')
         self.root.configure(bg=COLOR_BG)
-        self.root.minsize(480, 420)
 
-        # ---------- ROS 节点 ----------
+        # ---------- ROS 节点（main 中已 rclpy.init）----------
         self.node = rclpy.create_node('llm_gui')
         self.pub = self.node.create_publisher(String, 'llm_cmd', 10)
         self.sub = self.node.create_subscription(String, 'llm_reply',
@@ -133,11 +133,15 @@ class LLMGui:
         self.executor.add_node(self.node)
         threading.Thread(target=self.executor.spin, daemon=True).start()
 
-        # ---------- 语音 ----------
+        # ---------- 语音（懒加载）----------
         self.recorder = VoiceRecorder()
 
         self._build_ui()
+        self._fit_screen()
         self.append_chat('系统', 'LLM 导航指挥官已就绪。输入指令，或单击语音按钮说话。')
+
+        # 诊断：2 秒后打印窗口与控件状态（写入 stdout 日志）
+        self.root.after(2000, self._dump_geometry)
 
     # ---------- UI ----------
     def _build_ui(self):
@@ -149,28 +153,28 @@ class LLMGui:
         self.chat.tag_configure('user', foreground=COLOR_USER)
         self.chat.tag_configure('robot', foreground=COLOR_ROBOT)
         self.chat.tag_configure('sys', foreground=COLOR_SYS)
-        self.chat.pack(fill='both', expand=True, padx=10, pady=10)
+        self.chat.pack(side='top', fill='both', expand=True, padx=10, pady=(10, 4))
 
         # 输入区
-        bottom = tk.Frame(self.root, bg=COLOR_BG)
-        bottom.pack(fill='x', padx=10, pady=(0, 10))
+        self.bottom = tk.Frame(self.root, bg=COLOR_BG)
+        self.bottom.pack(side='bottom', fill='x', padx=10, pady=(4, 10))
 
         self.input_var = tk.StringVar()
-        self.entry = tk.Entry(bottom, textvariable=self.input_var,
+        self.entry = tk.Entry(self.bottom, textvariable=self.input_var,
                               bg=COLOR_INPUT, fg=COLOR_TEXT,
                               font=('Noto Sans CJK SC', 12),
                               insertbackground=COLOR_TEXT, relief='flat')
         self.entry.pack(side='left', fill='x', expand=True, ipady=6)
         self.entry.bind('<Return>', lambda e: self.send())
 
-        self.send_btn = tk.Button(bottom, text='发送', command=self.send,
+        self.send_btn = tk.Button(self.bottom, text='发送', command=self.send,
                                   bg=COLOR_BTN, fg=COLOR_TEXT,
                                   font=('Noto Sans CJK SC', 11),
                                   relief='flat', padx=14, pady=4,
                                   activebackground='#585b70')
         self.send_btn.pack(side='left', padx=(6, 0))
 
-        self.voice_btn = tk.Button(bottom, text='语音输入', command=self.toggle_voice,
+        self.voice_btn = tk.Button(self.bottom, text='语音输入', command=self.toggle_voice,
                                    bg=COLOR_BTN, fg=COLOR_TEXT,
                                    font=('Noto Sans CJK SC', 11),
                                    relief='flat', padx=14, pady=4,
@@ -178,6 +182,34 @@ class LLMGui:
         self.voice_btn.pack(side='left', padx=(6, 0))
 
         self.root.protocol('WM_DELETE_WINDOW', self.on_close)
+
+    def _fit_screen(self):
+        """窗口自适应屏幕尺寸并居中"""
+        try:
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            w = min(620, sw - 80)
+            h = min(560, sh - 120)
+            x = max(0, (sw - w) // 2)
+            y = max(0, (sh - h) // 2)
+            self.root.geometry(f'{w}x{h}+{x}+{y}')
+            self.root.minsize(440, 380)
+        except Exception as e:
+            self.root.geometry('620x560')
+
+    def _dump_geometry(self):
+        """诊断：输出窗口与控件几何信息"""
+        try:
+            print(f'[GUI诊断] 窗口: {self.root.winfo_geometry()}')
+            print(f'[GUI诊断] 屏幕: {self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}')
+            for name, w in (('chat', self.chat), ('bottom', self.bottom),
+                            ('entry', self.entry), ('send_btn', self.send_btn),
+                            ('voice_btn', self.voice_btn)):
+                print(f'[GUI诊断] {name}: {w.winfo_geometry()} 映射={w.winfo_ismapped()}')
+        except Exception as e:
+            print(f'[GUI诊断] 失败: {e}')
+        # 定期刷新，观察是否被系统调整
+        self.root.after(10000, self._dump_geometry)
 
     # ---------- 聊天 ----------
     def append_chat(self, who, text):
