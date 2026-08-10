@@ -60,17 +60,21 @@
 
 ```
 /home/yax/NL2NAV/
-├── start_gui.sh                 # 一键启动聊天窗口（含输入法环境）
+├── start_nl2nav.sh              # 🚀 一键启动：Gazebo + Nav2 + LLM 指挥官
+├── start_gui.sh                 # 启动聊天窗口（含输入法环境）
 ├── models/                      # vosk 中文语音模型
 │   └── vosk-model-small-cn-0.22/
-└── nl2nav_ws/                   # ROS2 工作空间
-    └── src/llm_nav_robot/
-        ├── llm_nav_robot/
-        │   ├── llm_commander.py # 主节点：LLM 意图解析 + Nav2 执行
-        │   ├── llm_gui.py       # 聊天窗口（文字 + 语音输入）
-        │   └── api_config.py    # DeepSeek Key（读 ~/桌面/API合集.md）
-        └── launch/
-            └── llm_nav.launch.py
+└── nl2nav_ws/                   # ROS2 工作空间（自包含，不依赖 chapt 目录）
+    └── src/
+        ├── llm_nav_robot/       # LLM 指挥官（本项目核心）
+        │   ├── llm_nav_robot/
+        │   │   ├── llm_commander.py # 主节点：LLM 意图解析 + Nav2 执行
+        │   │   ├── llm_gui.py       # 聊天窗口（文字 + 语音输入）
+        │   │   └── api_config.py    # DeepSeek Key（读 ~/桌面/API合集.md）
+        │   └── launch/
+        │       └── llm_nav.launch.py
+        ├── yax_description/     # 🚗 小车本体：URDF/Xacro 模型 + Gazebo 仿真
+        └── yax_navigation2/     # 🧭 导航配置：Nav2 参数 + 地图（room.yaml）
 ```
 
 ---
@@ -80,8 +84,8 @@
 | 依赖 | 说明 |
 |---|---|
 | Ubuntu 22.04 + ROS2 Humble | 基础环境 |
-| Navigation2 / Gazebo | 导航与仿真（chapt7 已装） |
-| yax 系列功能包 | 小车模型/导航配置，来自 `/home/yax/chapt7/chapt7_ws`（fishbot 更名版） |
+| Navigation2 / Gazebo | 导航与仿真（ROS2 环境已装） |
+| yax 系列功能包 | 小车模型/导航配置，**已内置本项目**（`nl2nav_ws/src/` 下 yax_description / yax_navigation2） |
 | DeepSeek API | 意图解析，Key 存于 `~/桌面/API合集.md`（不硬编码） |
 | Python: requests / sounddevice / vosk | LLM 调用 / 录音 / 离线识别 |
 | tkinter | 系统自带 GUI 库 |
@@ -90,16 +94,27 @@
 
 ## 🚀 启动步骤
 
+**一键启动（推荐）：**
+
+```bash
+# 1️⃣ 启动全部：Gazebo 小车 + Nav2 导航 + LLM 指挥官
+bash ~/NL2NAV/start_nl2nav.sh
+
+# 2️⃣ 打开聊天窗口（另开终端）
+bash ~/NL2NAV/start_gui.sh
+```
+
+**手动分步启动（调试用）：**
+
 ```bash
 # 1️⃣ 启动仿真（Gazebo + 小车 + ros2_control）
-cd /home/yax/chapt7/chapt7_ws && source install/setup.bash
+cd /home/yax/NL2NAV/nl2nav_ws && source install/setup.bash
 ros2 launch yax_description gazebo_sim.launch.py
 
 # 2️⃣ 启动导航（Nav2 + 地图 + RViz）——等 Gazebo 就绪后
 ros2 launch yax_navigation2 navigarion2.launch.py
 
 # 3️⃣ 启动 LLM 指挥官（等 Nav2 全部 active）
-cd /home/yax/NL2NAV/nl2nav_ws && source install/setup.bash
 ros2 run llm_nav_robot llm_commander
 
 # 4️⃣ 打开聊天窗口（桌面）
@@ -139,5 +154,5 @@ bash ~/NL2NAV/start_gui.sh
 
 ## 🔗 关联
 
-- 小车本体与导航配置：`/home/yax/chapt7/chapt7_ws`（yax_description / yax_navigation2 / yax_application）
+- 小车本体与导航配置：已内置本项目（yax_description / yax_navigation2），上游源自 chapt7 学习项目
 - 学习项目文档：`~/桌面/ROS2雷达小车项目.md`、`~/桌面/ROS2项目日志.md`
