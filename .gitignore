@@ -3,3 +3,6 @@ install/
 log/
 __pycache__/
 *.pyc
+
+# 本地 API Key（不入库）
+api_key.txt

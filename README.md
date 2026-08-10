@@ -47,7 +47,34 @@
 | Ubuntu 22.04 + ROS2 Humble | 基础环境 |
 | Navigation2 / Gazebo | 导航与仿真 |
 | Python: requests / sounddevice / vosk / tkinter | LLM 调用 / 录音 / 离线识别 / GUI |
-| DeepSeek API Key | 意图解析（环境变量 `DEEPSEEK_API_KEY` 或本地配置文件） |
+| DeepSeek API Key | 意图解析（见下方「配置 API Key」） |
+
+### 配置 API Key
+
+ChatNav 使用 DeepSeek API 解析自然语言指令，使用前需配置你的 Key（二选一）：
+
+**方式一：环境变量（推荐）**
+
+```bash
+export DEEPSEEK_API_KEY=sk-你的key
+```
+
+**方式二：本地文件**
+
+在用户目录创建配置文件（推荐位置，跨安装/源码模式均稳定）：
+
+```bash
+mkdir -p ~/.chatnav
+echo "sk-你的key" > ~/.chatnav/api_key.txt
+```
+
+也可以在与 `api_config.py` 同目录下创建 `api_key.txt`（仅源码运行模式）：
+
+```
+sk-你的key
+```
+
+> ⚠️ 以上文件均不会被 git 跟踪；请勿将 Key 写入任何将被提交的文件。
 
 ### 一键启动
 

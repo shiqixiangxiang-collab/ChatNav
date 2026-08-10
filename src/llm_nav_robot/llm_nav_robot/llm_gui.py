@@ -28,7 +28,11 @@ try:
 except Exception:
     SOUNDDEVICE_OK = False
 
-VOSK_MODEL_DIR = os.path.expanduser('~/ChatNav/models/vosk-model-small-cn-0.22')
+# 语音模型路径：优先环境变量 CHATNAV_MODELS_DIR，否则基于项目根目录（models/）自动定位
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+VOSK_MODEL_DIR = os.environ.get('CHATNAV_MODELS_DIR') or os.path.join(
+    _PROJECT_ROOT, 'models', 'vosk-model-small-cn-0.22')
 SAMPLERATE = 16000
 
 # 界面配色（暗色指挥台）
