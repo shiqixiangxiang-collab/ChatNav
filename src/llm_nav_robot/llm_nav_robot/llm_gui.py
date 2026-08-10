@@ -28,7 +28,7 @@ try:
 except Exception:
     SOUNDDEVICE_OK = False
 
-VOSK_MODEL_DIR = os.path.expanduser('~/NL2NAV/models/vosk-model-small-cn-0.22')
+VOSK_MODEL_DIR = os.path.expanduser('~/ChatNav/models/vosk-model-small-cn-0.22')
 SAMPLERATE = 16000
 
 # 界面配色（暗色指挥台）
