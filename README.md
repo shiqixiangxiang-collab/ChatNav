@@ -70,7 +70,7 @@
         │   ├── llm_nav_robot/
         │   │   ├── llm_commander.py # 主节点：LLM 意图解析 + Nav2 执行
         │   │   ├── llm_gui.py       # 聊天窗口（文字 + 语音输入）
-        │   │   └── api_config.py    # DeepSeek Key（读 ~/桌面/API合集.md）
+        │   │   └── api_config.py    # DeepSeek Key（读 ~/桌面/常用可调用物.md）
         │   └── launch/
         │       └── llm_nav.launch.py
         ├── yax_description/     # 🚗 小车本体：URDF/Xacro 模型 + Gazebo 仿真
@@ -86,7 +86,7 @@
 | Ubuntu 22.04 + ROS2 Humble | 基础环境 |
 | Navigation2 / Gazebo | 导航与仿真（ROS2 环境已装） |
 | yax 系列功能包 | 小车模型/导航配置，**已内置本项目**（`chatnav_ws/src/` 下 yax_description / yax_navigation2） |
-| DeepSeek API | 意图解析，Key 存于 `~/桌面/API合集.md`（不硬编码） |
+| DeepSeek API | 意图解析，Key 存于 `~/桌面/常用可调用物.md`（不硬编码） |
 | Python: requests / sounddevice / vosk | LLM 调用 / 录音 / 离线识别 |
 | tkinter | 系统自带 GUI 库 |
 

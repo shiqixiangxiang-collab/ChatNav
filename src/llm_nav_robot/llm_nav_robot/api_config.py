@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""API 配置：从环境变量或桌面 API合集.md 读取 DeepSeek Key
-真相来源：~/桌面/API合集.md（与 OpenClaw 约定一致）
+"""API 配置：从环境变量或桌面 常用可调用物.md 读取 DeepSeek Key
+真相来源：~/桌面/常用可调用物.md（账号·密码·API Key 汇总，与 OpenClaw 约定一致）
 """
 
 import os
@@ -14,9 +14,9 @@ def get_deepseek_api_key() -> str:
     if key:
         return key.strip()
 
-    path = os.path.expanduser('~/桌面/API合集.md')
+    path = os.path.expanduser('~/桌面/常用可调用物.md')
     if not os.path.exists(path):
-        raise RuntimeError('未找到 API 配置文件，请检查 ~/桌面/API合集.md')
+        raise RuntimeError('未找到配置文件，请检查 ~/桌面/常用可调用物.md')
 
     with open(path, 'r', encoding='utf-8', errors='ignore') as f:
         text = f.read()
@@ -25,7 +25,7 @@ def get_deepseek_api_key() -> str:
     if m:
         return m.group(1).strip()
 
-    raise RuntimeError('API合集.md 中未找到 DeepSeek Key（格式应为 deepseek: sk-xxx）')
+    raise RuntimeError('常用可调用物.md 中未找到 DeepSeek Key（格式应为 deepseek: sk-xxx）')
 
 
 if __name__ == '__main__':
