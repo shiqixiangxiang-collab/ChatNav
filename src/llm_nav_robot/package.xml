@@ -4,7 +4,7 @@
   <name>llm_nav_robot</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="shiqixiangxiang@gmail.com">yax</maintainer>
+  <maintainer email="shiqixiangxiang@gmail.com">shiqixiangxiang</maintainer>
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>

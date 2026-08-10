@@ -2,15 +2,15 @@
   ros__parameters:
     update_rate: 200  # Hz
     use_sim_time: true
-    yax_joint_state_broadcaster:
+    chatnav_joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
       use_sim_time: true
-    yax_effort_controller:
+    chatnav_effort_controller:
       type: effort_controllers/JointGroupEffortController
-    yax_diff_drive_controller:
+    chatnav_diff_drive_controller:
       type: diff_drive_controller/DiffDriveController
 
-yax_effort_controller:
+chatnav_effort_controller:
   ros__parameters:
     joints:
       - left_wheel_joint
@@ -24,7 +24,7 @@ yax_effort_controller:
 
 
 
-yax_diff_drive_controller:
+chatnav_diff_drive_controller:
   ros__parameters:
     left_wheel_names: ["left_wheel_joint"]
     right_wheel_names: ["right_wheel_joint"]

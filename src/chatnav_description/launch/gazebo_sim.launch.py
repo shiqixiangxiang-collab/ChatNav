@@ -5,8 +5,8 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     # 获取功能包的share路径
-    urdf_package_path = get_package_share_directory('yax_description')
-    default_xacro_path = os.path.join(urdf_package_path, 'urdf', 'yax/yax.urdf.xacro')
+    urdf_package_path = get_package_share_directory('chatnav_description')
+    default_xacro_path = os.path.join(urdf_package_path, 'urdf', 'chatnav/chatnav.urdf.xacro')
     #default_rviz_config_path = os.path.join(urdf_package_path, 'config', 'display_robot_model.rviz')
     default_gazebo_world_path = os.path.join(urdf_package_path, 'world', 'custom_room.world')
 
@@ -38,18 +38,18 @@ def generate_launch_description():
     action_spawn_entity = launch_ros.actions.Node(
         package='gazebo_ros',
         executable='spawn_entity.py',
-        arguments=['-topic','/robot_description','-entity','yax']
+        arguments=['-topic','/robot_description','-entity','chatnav']
     )
     action_load_joint_state_controller = launch.actions.ExecuteProcess(
-        cmd='ros2 control load_controller yax_joint_state_broadcaster --set-state active'.split(' '),
+        cmd='ros2 control load_controller chatnav_joint_state_broadcaster --set-state active'.split(' '),
         output='screen'
     )
     # action_load_effort_controller = launch.actions.ExecuteProcess(
-    #     cmd='ros2 control load_controller yax_effort_controller --set-state active'.split(' '),
+    #     cmd='ros2 control load_controller chatnav_effort_controller --set-state active'.split(' '),
     #     output='screen'
     # )    
     action_load_diff_drive_controller = launch.actions.ExecuteProcess(
-        cmd='ros2 control load_controller yax_diff_drive_controller --set-state active'.split(' '),
+        cmd='ros2 control load_controller chatnav_diff_drive_controller --set-state active'.split(' '),
         output='screen'
     )  
     # action_joint_state_publisher = launch_ros.actions.Node(

@@ -5,7 +5,7 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     # 获取默认的urdf路径
-    urdf_package_path = get_package_share_directory('yax_description')
+    urdf_package_path = get_package_share_directory('chatnav_description')
     default_urdf_path = os.path.join(urdf_package_path, 'urdf', 'first_robot.urdf')
     default_rviz_config_path = os.path.join(urdf_package_path, 'config', 'display_robot_model.rviz')
     # 声明一个urdf参数

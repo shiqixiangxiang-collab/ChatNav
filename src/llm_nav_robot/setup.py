@@ -17,7 +17,7 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='yax',
+    maintainer='shiqixiangxiang',
     maintainer_email='shiqixiangxiang@gmail.com',
     description='自然语言指挥雷达小车：LLM 意图解析 + Nav2 导航',
     license='Apache-2.0',
